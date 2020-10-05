@@ -204,15 +204,35 @@ class ParticleFilter:
         xy_theta = self.transform_helper.convert_pose_to_xy_and_theta(msg.pose.pose)
         self.initialize_particle_cloud(msg.header.stamp, xy_theta)
 
-    def initialize_particle_cloud(self, timestamp, xy_theta=None):
+    def initialize_particle_cloud(self, timestamp, xy_theta=None, estimate_location= False):
         """ Initialize the particle cloud.
             Arguments
             xy_theta: a triple consisting of the mean x, y, and theta (yaw) to initialize the
                       particle cloud around.  If this input is omitted, the odometry will be used """
         if xy_theta is None:
             xy_theta = self.transform_helper.convert_pose_to_xy_and_theta(self.odom_pose.pose)
+
         self.particle_cloud = []
         # TODO create particles
+
+        #check whether the algorithm should assume inital conditions or not
+        if estimate_location == False:
+            #create an index to track the x cordinate of the particles being created
+            xindex = 0
+            #iterate over the map to place points in a uniform grid
+            while index_x < map_max_x:
+                
+                index_y = 0
+                while index_y < map_max_y:
+                    #create a particle at the location with a random orientation
+                    new_particle = Particle(index_x,index_y,random.uniform(0,2 * math.pi))
+                    #add the particle to the particle array
+                    self.particle_cloud.append(new_particle)
+                    
+                    #increment the index to place the next particle
+                    index_y += map_max_y/(num_particles_y)
+                #increment index to place next column of particles
+                index_x += map_max_x/num_particles_x
 
         self.normalize_particles()
         self.update_robot_pose(timestamp)
