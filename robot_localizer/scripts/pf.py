@@ -218,6 +218,13 @@ class ParticleFilter:
         #check whether the algorithm should assume inital conditions or not
         if estimate_location == False:
             #create an index to track the x cordinate of the particles being created
+            
+            #calculate the number of particles to place widthwize vs hightwize along the map based on the number of particles and the dimensions of the map
+            num_particles_x = math.sqrt(self.number_of_particles * map_max_y / map_max_x)
+            num_particles_y = num_particles_x * map_max_x / map_max_y 
+
+
+
             xindex = 0
             #iterate over the map to place points in a uniform grid
             while index_x < map_max_x:
