@@ -39,7 +39,7 @@ class Particle(object):
             x: the x-coordinate of the hypothesis relative to the map frame
             y: the y-coordinate of the hypothesis relative ot the map frame
             theta: the yaw of the hypothesis relative to the map frame
-            w: the particle weight (the class does not ensure that particle weights are normalized """
+            w: the particle weight (the class does not ensure that particle weights are normalized """ 
         self.w = w
         self.theta = theta
         self.x = x
@@ -81,7 +81,7 @@ class ParticleFilter:
         self.base_frame = "base_link"   # the frame of the robot base
         self.map_frame = "map"          # the name of the map coordinate frame
         self.odom_frame = "odom"        # the name of the odometry coordinate frame
-        self.scan_topic = "scan"        # the topic where we will get laser scans from
+        self.scan_topic = "scan"        # the topic where we will get laser scans from 
 
         self.n_particles = 300          # the number of particles to use
 
@@ -117,10 +117,8 @@ class ParticleFilter:
             rospy.Subscriber("projected_stable_scan", PointCloud, self.projected_scan_received)
 
         self.current_odom_xy_theta = []
-        #self.occupancy_field = OccupancyField()
-        print('Hi from init')
+        self.occupancy_field = OccupancyField()
         self.transform_helper = TFHelper()
-        print('transform helper init')
         self.initialized = True
 
     def update_robot_pose(self, timestamp):
@@ -215,9 +213,7 @@ class ParticleFilter:
             xy_theta = self.transform_helper.convert_pose_to_xy_and_theta(self.odom_pose.pose)
         self.particle_cloud = []
         # TODO create particles
-        p1 = Particle(1,1,0,0)
-        self.particle_cloud.append(p1)
-        print('HI')
+
         self.normalize_particles()
         self.update_robot_pose(timestamp)
 
@@ -243,6 +239,10 @@ class ParticleFilter:
             # wait for initialization to complete
             return
 
+        # wait a little while to see if the transform becomes available.  This fixes a race
+        # condition where the scan would arrive a little bit before the odom to base_link transform
+        # was updated.
+        self.tf_listener.waitForTransform(self.base_frame, msg.header.frame_id, msg.header.stamp, rospy.Duration(0.5))
         if not(self.tf_listener.canTransform(self.base_frame, msg.header.frame_id, msg.header.stamp)):
             # need to know how to transform the laser to the base frame
             # this will be given by either Gazebo or neato_node
@@ -251,7 +251,6 @@ class ParticleFilter:
         if not(self.tf_listener.canTransform(self.base_frame, self.odom_frame, msg.header.stamp)):
             # need to know how to transform between base and odometric frames
             # this will eventually be published by either Gazebo or neato_node
-            print('3rd')
             return
 
         # calculate pose of laser relative to the robot base
