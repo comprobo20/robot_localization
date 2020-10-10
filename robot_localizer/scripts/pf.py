@@ -191,7 +191,6 @@ class ParticleFilter:
             else:
                 p.w = 1 / (nearest_pt - msg.range_min)
 
-            # print(p.w)
         self.normalize_particles()
 
     @staticmethod
@@ -241,13 +240,11 @@ class ParticleFilter:
 
         # Compute cumulative weight
         for p in self.particle_cloud:
-            print(p.w)
             cumulative_weight += p.w
 
         # Normalize weights
         for p in self.particle_cloud:
             p.w = p.w/cumulative_weight
-            print(p.w)
 
     def publish_particles(self, msg):
         particles_conv = []
@@ -325,7 +322,6 @@ class ParticleFilter:
                 last_projected_scan_timeshift.header.stamp = msg.header.stamp
                 self.scan_in_base_link = self.tf_listener.transformPointCloud("base_link", last_projected_scan_timeshift)
 
-            print("here")
             self.update_particles_with_laser(msg)   # update based on laser scan
             # self.publish_particles(msg)
             self.update_robot_pose(msg.header.stamp)                # update robot's pose
