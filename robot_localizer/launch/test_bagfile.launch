@@ -28,5 +28,7 @@
   <node name="pf" pkg="robot_localizer" type="pf.py" output="screen">
     <remap from="scan" to="$(arg scan_topic)"/>
   </node>
+  <node name="visualize_weights" pkg="robot_localizer"
+    type="visualize_weights.py" output="screen"/>
 </group>
 </launch>
