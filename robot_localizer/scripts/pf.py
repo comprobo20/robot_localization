@@ -7,6 +7,7 @@ import rospy
 from std_msgs.msg import Header, String
 from sensor_msgs.msg import LaserScan, PointCloud
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, PoseArray, Pose, Point, Quaternion
+from robot_localizer.msg import Particle, ParticleArray
 from nav_msgs.srv import GetMap
 from copy import deepcopy
 
@@ -99,6 +100,8 @@ class ParticleFilter:
 
         # publish the current particle cloud.  This enables viewing particles in rviz.
         self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10)
+        # publish custom particle array messge type
+        self.particle_viz_pub = rospy.Publisher("weighted_particlecloud", ParticleArray, queue_size=10)
 
         # laser_subscriber listens for data from the lidar
         rospy.Subscriber(self.scan_topic, LaserScan, self.scan_received)
@@ -183,8 +186,12 @@ class ParticleFilter:
             # Find nearest point to each particle according to map
             nearest_pt = self.occupancy_field.get_closest_obstacle_distance(p.x, p.y)
             # Update weight based on inverse of difference
-            p.w = 1 / (nearest_pt - msg.range_min)
+            if (nearest_pt - msg.range_min) == 0:
+                p.w = 50.0
+            else:
+                p.w = 1 / (nearest_pt - msg.range_min)
 
+            # print(p.w)
         self.normalize_particles()
 
     @staticmethod
@@ -234,20 +241,35 @@ class ParticleFilter:
 
         # Compute cumulative weight
         for p in self.particle_cloud:
+            print(p.w)
             cumulative_weight += p.w
 
         # Normalize weights
         for p in self.particle_cloud:
             p.w = p.w/cumulative_weight
+            print(p.w)
 
     def publish_particles(self, msg):
         particles_conv = []
+        custom_particle_msgs = []
+
         for p in self.particle_cloud:
-            particles_conv.append(p.as_pose())
+            particle_pose = p.as_pose()
+            particles_conv.append(particle_pose)
+
+            # Create new particle message
+            new_particle = Particle()
+            new_particle.pose = particle_pose
+            new_particle.weight = p.w
+            custom_particle_msgs.append(new_particle)
         # actually send the message so that we can view it in rviz
         self.particle_pub.publish(PoseArray(header=Header(stamp=rospy.Time.now(),
                                             frame_id=self.map_frame),
                                   poses=particles_conv))
+        # send our custom message to visualize weights in rviz
+        self.particle_viz_pub.publish(ParticleArray(header=Header(stamp=rospy.Time.now(),
+                                                    frame_id=self.map_frame),
+                                      particles=custom_particle_msgs))
 
     def scan_received(self, msg):
         """ This is the default logic for what to do when processing scan data.
@@ -255,7 +277,10 @@ class ParticleFilter:
             guide.  The input msg is an object of type sensor_msgs/LaserScan """
         if not(self.initialized):
             # wait for initialization to complete
+            rospy.loginfo_once("Waiting for initial pose estimate...")
             return
+        else:
+            rospy.loginfo_once("Initial pose estimate found!")
 
         # wait a little while to see if the transform becomes available.  This fixes a race
         # condition where the scan would arrive a little bit before the odom to base_link transform
@@ -300,7 +325,9 @@ class ParticleFilter:
                 last_projected_scan_timeshift.header.stamp = msg.header.stamp
                 self.scan_in_base_link = self.tf_listener.transformPointCloud("base_link", last_projected_scan_timeshift)
 
+            print("here")
             self.update_particles_with_laser(msg)   # update based on laser scan
+            # self.publish_particles(msg)
             self.update_robot_pose(msg.header.stamp)                # update robot's pose
             self.resample_particles()               # resample particles to focus on areas of high density
         # publish particles (so things like rviz can see them)
