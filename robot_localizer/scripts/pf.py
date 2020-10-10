@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 """ This is the starter code for the robot localization project """
 
@@ -179,8 +179,13 @@ class ParticleFilter:
 
     def update_particles_with_laser(self, msg):
         """ Updates the particle weights in response to the scan contained in the msg """
-        # TODO: implement this
-        pass
+        for p in self.particle_cloud:
+            # Find nearest point to each particle according to map
+            nearest_pt = self.occupancy_field.get_closest_obstacle_distance(p.x, p.y)
+            # Update weight based on inverse of difference
+            p.w = 1 / (nearest_pt - msg.range_min)
+
+        self.normalize_particles()
 
     @staticmethod
     def draw_random_sample(choices, probabilities, n):
@@ -214,13 +219,26 @@ class ParticleFilter:
         self.particle_cloud = []
         # TODO create particles
 
+        # TODO: Create better distribution (currently just randomly generated)
+        for i in range(self.n_particles):
+            new_pose = np.array(xy_theta) + np.random.randn(3)
+            new_particle = Particle(*new_pose)
+            self.particle_cloud.append(new_particle)
+
         self.normalize_particles()
         self.update_robot_pose(timestamp)
 
     def normalize_particles(self):
         """ Make sure the particle weights define a valid distribution (i.e. sum to 1.0) """
-        # TODO: implement this
-        pass
+        cumulative_weight = 0
+
+        # Compute cumulative weight
+        for p in self.particle_cloud:
+            cumulative_weight += p.w
+
+        # Normalize weights
+        for p in self.particle_cloud:
+            p.w = p.w/cumulative_weight
 
     def publish_particles(self, msg):
         particles_conv = []
