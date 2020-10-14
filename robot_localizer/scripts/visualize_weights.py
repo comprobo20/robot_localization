@@ -15,7 +15,8 @@ class ParticleVisualizer(object):
         self.r = rospy.Rate(rate)
 
         # Used to scale colors
-        self.max_weight = rospy.get_param("~max_weight", 0.02)
+        # TODO: Make this max weight dynamic
+        self.max_weight = rospy.get_param("~max_weight", 0.0075)
 
         self.particlearray_sub = rospy.Subscriber("weighted_particlecloud",
             ParticleArray, self.particlearrayCB)
@@ -48,7 +49,6 @@ class ParticleVisualizer(object):
 
             # Fill in marker position & orientation info
             new_marker.pose = particle.pose
-
             # Color marker based on weight (green = high weight, red = low)
             new_marker.color.r = 1 - particle.weight/self.max_weight
             new_marker.color.g = particle.weight/self.max_weight

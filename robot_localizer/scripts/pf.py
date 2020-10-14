@@ -183,13 +183,47 @@ class ParticleFilter:
     def update_particles_with_laser(self, msg):
         """ Updates the particle weights in response to the scan contained in the msg """
         for p in self.particle_cloud:
-            # Find nearest point to each particle according to map
-            nearest_pt = self.occupancy_field.get_closest_obstacle_distance(p.x, p.y)
-            # Update weight based on inverse of difference
-            if (nearest_pt - msg.range_min) == 0:
-                p.w = 50.0
+            # Compute delta to x,y coords in map frame of each lidar point assuming
+            # lidar is centered at the base_link
+            # TODO: Account for the offset between the lidar and the base_link
+            angles = np.arange(0, 361, dtype=float)
+            dxs = msg.ranges * np.cos(np.degrees(angles + p.theta))
+            dys = msg.ranges * np.sin(np.degrees(angles + p.theta))
+
+            # Initialize total distance to 0
+            d = 0
+            # Initialize number of valid points
+            valid_pts = len(dxs)
+
+            for dx,dy in zip(dxs, dys):
+                # Ignore points with invalid ranges
+                if dx == 0 and dy == 0:
+                    continue
+
+                # Apply delta
+                x = p.x + dx
+                y = p.y + dy
+
+                # Find nearest point to each lidar point according to map
+                dist = self.occupancy_field.get_closest_obstacle_distance(x, y)
+                # Check to make sure lidar point is actually on the map
+                if not np.isnan(dist):
+                    d += dist
+                else:
+                    valid_pts -= 1
+
+            # If there aren't enough valid points for the particle, assume that it's
+            # not good
+            # TODO: Add a ROS param threshold for this
+            if valid_pts < 10:
+                p.w = 0
             else:
-                p.w = 1 / (nearest_pt - msg.range_min)
+                # Update particle weight based on inverse of average difference
+                if d != 0:
+                    p.w = 1 / (d/valid_pts)
+                else:
+                    # If difference is exactly 0, something's likely wrong
+                    rospy.logwarn("Computed difference between particle projection and lidar scan is exactly 0")
 
         self.normalize_particles()
 
@@ -323,7 +357,6 @@ class ParticleFilter:
                 self.scan_in_base_link = self.tf_listener.transformPointCloud("base_link", last_projected_scan_timeshift)
 
             self.update_particles_with_laser(msg)   # update based on laser scan
-            # self.publish_particles(msg)
             self.update_robot_pose(msg.header.stamp)                # update robot's pose
             self.resample_particles()               # resample particles to focus on areas of high density
         # publish particles (so things like rviz can see them)
