@@ -272,7 +272,7 @@ class ParticleFilter:
         # actually send the message so that we can view it in rviz
         
         self.particle_pub.publish(PoseArray(header=Header(stamp=rospy.Time.now(),
-                                            frame_id=self.map_frame),
+                                            frame_id=self.odom_frame),
                                   poses=particles_conv))
 
     def transform_scan(self, point, shift):
