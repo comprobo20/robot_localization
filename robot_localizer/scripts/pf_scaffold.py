@@ -14,7 +14,7 @@ from copy import deepcopy
 import tf
 from tf import TransformListener
 from tf import TransformBroadcaster
-from tf.transformations import euler_from_quaternion, rotation_matrix, quaternion_from_matrix
+from tf.transformations import euler_from_quaternion, rotation_matrix, quaternion_from_matrix, quaternion_from_euler
 from random import gauss
 
 import math
@@ -107,7 +107,6 @@ class ParticleFilter:
 
         self.laser_max_distance = 2.0   # maximum penalty to assess in the likelihood field model
 
-        # TODO: define additional constants if needed
     
         # Setup pubs and subs
 
@@ -166,28 +165,38 @@ class ParticleFilter:
             msg: this is not really needed to implement this, but is here just in case.
         """
         print("update_particles_with_odom")
+
+        # find out where the robot thinks it is based on its odometry
+        p = PoseStamped(header=Header(stamp=msg.header.stamp,
+                                      frame_id=self.base_frame),
+                        pose=Pose())
+        self.odom_pose = self.tf_listener.transformPose(self.odom_frame, p)
+        # store the the odometry pose in a more convenient format (x,y,theta)
         new_odom_xy_theta = self.transform_helper.convert_pose_to_xy_and_theta(self.odom_pose.pose)
+        # print(delta)
+      
         # compute the change in x,y,theta since our last update
         delta = (0,0,0)
+
+       
         if self.current_odom_xy_theta:
             old_odom_xy_theta = self.current_odom_xy_theta
             delta = (new_odom_xy_theta[0] - self.current_odom_xy_theta[0],
                      new_odom_xy_theta[1] - self.current_odom_xy_theta[1],
                      new_odom_xy_theta[2] - self.current_odom_xy_theta[2])
 
-            self.current_odom_xy_theta = new_odom_xy_theta
-        else:
-            self.current_odom_xy_theta = new_odom_xy_theta
+            for i in range(len(self.particle_cloud)):
+                self.particle_cloud[i].x += delta[0] + np.random.normal(0, 0.1)
+                self.particle_cloud[i].y += delta[1] + np.random.normal(0, 0.1)
+                self.particle_cloud[i].theta += delta[1] + np.random.normal(0, 0.1)
+
+            new_odom_xy_theta = self.transform_helper.convert_pose_to_xy_and_theta(self.odom_pose.pose)
+
+        self.current_odom_xy_theta = new_odom_xy_theta
         
-        return delta
+        return self.particle_cloud
 
         # TODO: modify particles using delta
-
-    def map_calc_range(self,x,y,theta):
-        """ Difficulty Level 3: implement a ray tracing likelihood model... Let me know if you are interested """
-        # TODO: nothing unless you want to try this alternate likelihood model
-        pass
-
 
     def resample_particles(self):
         """ Resample the particles according to the new particle weights.
@@ -303,7 +312,7 @@ class ParticleFilter:
             # wait for initialization to complete
             return
 
-        #self.tf_listener.waitForTransform(self.base_frame, self.odom_frame, msg.header.stamp, rospy.Duration(2))
+        self.tf_listener.waitForTransform(self.base_frame, self.odom_frame, msg.header.stamp, rospy.Duration(2))
 
         if not(self.tf_listener.canTransform(self.base_frame, msg.header.frame_id, msg.header.stamp)):
             # need to know how to transform the laser to the base frame
@@ -324,29 +333,8 @@ class ParticleFilter:
                                       frame_id=msg.header.frame_id))
         self.laser_pose = self.tf_listener.transformPose(self.base_frame, p)
 
-        # find out where the robot thinks it is based on its odometry
-        p = PoseStamped(header=Header(stamp=msg.header.stamp,
-                                      frame_id=self.base_frame),
-                        pose=Pose())
-        self.odom_pose = self.tf_listener.transformPose(self.odom_frame, p)
-        # store the the odometry pose in a more convenient format (x,y,theta)
-        new_odom_xy_theta = self.transform_helper.convert_pose_to_xy_and_theta(self.odom_pose.pose)
 
-        delta = self.update_particles_with_odom(msg)
-        dx = delta[0] #+ np.random.normal(delta[0], scale=1)
-        dy = delta[1] #+  np.random.normal(delta[1], scale=1)
-        da = delta[2] #+  np.random.normal(delta[2], scale=0.8)  # update based on odometry, returns the delta to move the particles
-        # print(delta)
-        for i in range(len(self.particle_cloud)):
-            self.particle_cloud[i].x += dx + np.random.normal(0, 0.1)
-            self.particle_cloud[i].y += dy + np.random.normal(0, 0.1)
-            self.particle_cloud[i].theta += da + np.random.normal(0, 0.1)
-        
-        if not self.current_odom_xy_theta:
-            self.current_odom_xy_theta = new_odom_xy_theta
-            print("currentodom")
-            return
-            
+        self.update_particles_with_odom(msg)
 
         if not(list(self.particle_cloud)):
             # now that we have all of the necessary transforms we can update the particle cloud
@@ -385,7 +373,7 @@ class ParticleFilter:
             weights.append(distances/len(scan))
             #self.visualize_particle_scan(myMarkerArray)
         avgPose = avgPose/self.n_particles
-        self.visualize_particle_scan([helper.create_marker(self.map_frame, "average", avgPose[0], avgPose[1])])
+        self.visualize_particle_scan([helper.create_marker(self.odom_frame, "average", avgPose[0], avgPose[1])])
         weights = np.nan_to_num(weights, nan = .001) 
         #print(self.particle_cloud)
         sumWeights = np.sum(weights)
